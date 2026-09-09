@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+
+    <link rel="stylesheet" href="./resources/ol.css">
+    <link rel="stylesheet" href="resources/fontawesome-all.min.css">
+    <link href="resources/photon-geocoder-autocomplete.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="./resources/ol-layerswitcher.css">
+    <link rel="stylesheet" href="./resources/qgis2web.css">
+
+    <title>Painel de Gestão • PR | Execução de Convênios</title>
+
+    <style>
+        :root {
+            --painel-w: 370px;
+            --painel-bg: #ffffff;
+            --painel-border: #e3e8ee;
+            --text: #1f2937;
+            --muted: #667085;
+            --surface: #f7f9fb;
+            --surface-2: #eef2f6;
+            --accent: #233a55;
+            --accent-soft: #eaf0f6;
+            --shadow: 0 10px 30px rgba(15, 23, 42, .12);
+        }
+
+        * { box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #fff; }
+        body { font-family: Inter, "Segoe UI", Arial, sans-serif; color: var(--text); }
+
+        #app-shell { position: relative; width: 100%; height: 100%; display: flex; overflow: hidden; }
+
+        #gestao-panel {
+            position: relative;
+            z-index: 1100;
+            flex: 0 0 var(--painel-w);
+            width: var(--painel-w);
+            height: 100%;
+            background: var(--painel-bg);
+            border-right: 1px solid var(--painel-border);
+            box-shadow: 6px 0 22px rgba(15, 23, 42, .08);
+            transition: margin-left .24s ease, transform .24s ease;
+            overflow: hidden;
+        }
+        #gestao-panel.collapsed { margin-left: calc(-1 * var(--painel-w)); }
+
+        .panel-scroll { height: 100%; overflow-y: auto; padding: 22px 20px 28px; scrollbar-width: thin; }
+        .panel-scroll::-webkit-scrollbar { width: 7px; }
+        .panel-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        .eyebrow { font-size: 12px; font-weight: 800; letter-spacing: .09em; color: var(--accent); text-transform: uppercase; }
+        .panel-title { margin: 8px 0 4px; font-size: 25px; line-height: 1.08; font-weight: 800; letter-spacing: -.02em; }
+        .panel-subtitle { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+        .period-badge { display: inline-flex; margin-top: 12px; padding: 6px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; }
+
+        .section { margin-top: 22px; }
+        .section-title { margin: 0 0 10px; font-size: 12px; font-weight: 800; letter-spacing: .055em; text-transform: uppercase; color: #475467; }
+
+        .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+        .metric-card { padding: 12px; border: 1px solid #e5eaf0; border-radius: 13px; background: var(--surface); min-height: 82px; }
+        .metric-label { font-size: 10px; line-height: 1.25; color: var(--muted); text-transform: uppercase; font-weight: 800; letter-spacing: .035em; }
+        .metric-value { margin-top: 8px; font-size: 18px; line-height: 1.12; font-weight: 800; word-break: break-word; }
+        .metric-value.money { font-size: 15px; }
+
+        .ranking, .legend-list { display: flex; flex-direction: column; gap: 7px; }
+        .rank-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: #fafbfc; border: 1px solid #edf0f3; }
+        .rank-name { font-size: 12px; font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rank-value { min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--accent); color: white; font-size: 12px; font-weight: 800; padding: 0 7px; }
+
+        .legend-row { display: grid; grid-template-columns: 18px 1fr; gap: 9px; align-items: center; padding: 4px 0; font-size: 12px; }
+        .legend-swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(0,0,0,.16); }
+        .legend-note { margin-top: 7px; font-size: 10px; line-height: 1.35; color: #8a94a3; }
+
+        #map { flex: 1 1 auto; width: auto !important; height: 100vh !important; min-width: 0; position: relative; }
+
+        #panel-toggle {
+            position: absolute;
+            z-index: 1250;
+            left: calc(var(--painel-w) + 12px);
+            top: 14px;
+            width: 38px;
+            height: 38px;
+            border: 1px solid rgba(15, 23, 42, .15);
+            border-radius: 10px;
+            background: rgba(255,255,255,.96);
+            box-shadow: 0 4px 16px rgba(15,23,42,.14);
+            cursor: pointer;
+            color: #344054;
+            font-size: 17px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: left .24s ease, background .18s ease;
+        }
+        #gestao-panel.collapsed ~ #panel-toggle { left: 12px; }
+        #panel-toggle:hover { background: #f8fafc; }
+
+        .ol-control > * { background-color: rgba(255,255,255,.95) !important; color: #344054 !important; border-radius: 8px !important; }
+        .ol-control > *:focus, .ol-control > *:hover { background-color: #f8fafc !important; }
+        .ol-control { background-color: transparent !important; padding: 2px !important; }
+        .ol-zoom { top: 62px !important; left: 12px !important; }
+        .ol-attribution a, .gcd-gl-input::placeholder, .search-layer-input-search::placeholder { color: #475467 !important; }
+        .search-layer-input-search { background-color: #fff !important; }
+
+        .ol-popup {
+            min-width: 340px !important;
+            max-width: min(430px, calc(100vw - 36px)) !important;
+            max-height: min(620px, calc(100vh - 70px)) !important;
+            padding: 0 !important;
+            border-radius: 15px !important;
+            border: 1px solid #dce3ea !important;
+            box-shadow: var(--shadow) !important;
+            background: white !important;
+        }
+        .ol-popup:after, .ol-popup:before { display: none !important; }
+        .ol-popup-closer { top: 12px !important; right: 12px !important; z-index: 3; color: #667085 !important; }
+        #popup-content { max-height: min(590px, calc(100vh - 90px)); overflow-y: auto; padding: 18px 18px 16px; }
+        #popup-content::-webkit-scrollbar { width: 7px; }
+        #popup-content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        .pop-head { padding-right: 25px; margin-bottom: 12px; }
+        .pop-municipio { font-size: 20px; line-height: 1.1; font-weight: 800; color: #172033; }
+        .pop-meta { margin-top: 4px; color: #7a8494; font-size: 11px; }
+        .pop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+        .pop-card { padding: 9px 10px; border-radius: 10px; background: #f7f9fb; border: 1px solid #e8edf2; }
+        .pop-card-label { color: #667085; font-size: 9px; font-weight: 800; letter-spacing: .035em; text-transform: uppercase; }
+        .pop-card-value { margin-top: 5px; font-size: 13px; font-weight: 800; color: #27364b; overflow-wrap: anywhere; }
+        .pop-section-title { margin: 15px 0 7px; padding-top: 11px; border-top: 1px solid #e6ebf0; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #475467; }
+        .situacao-list { display: flex; flex-direction: column; gap: 0; }
+        .situacao-row { display: grid; grid-template-columns: minmax(0,1fr) 38px; gap: 10px; align-items: start; padding: 7px 0; border-bottom: 1px solid #eef1f4; }
+        .situacao-desc { font-size: 11px; line-height: 1.3; color: #344054; overflow-wrap: anywhere; }
+        .situacao-qtd { justify-self: end; min-width: 30px; border-radius: 8px; background: #eef2f6; color: #25364a; padding: 4px 6px; text-align: center; font-size: 11px; font-weight: 800; }
+        .pop-link { margin-top: 12px; }
+        .pop-link a { display: block; text-decoration: none; text-align: center; background: var(--accent); color: #fff; padding: 9px 12px; border-radius: 10px; font-size: 11px; font-weight: 750; }
+
+        @media (max-width: 900px) {
+            :root { --painel-w: min(86vw, 340px); }
+            #gestao-panel { position: absolute; left: 0; top: 0; }
+            #gestao-panel.collapsed { margin-left: 0; transform: translateX(-101%); }
+            #gestao-panel:not(.collapsed) ~ #panel-toggle { left: calc(var(--painel-w) + 10px); }
+            #gestao-panel.collapsed ~ #panel-toggle { left: 10px; }
+            .cards { grid-template-columns: 1fr 1fr; }
+            .ol-zoom { top: 60px !important; }
+        }
+
+        @media (max-width: 520px) {
+            .panel-scroll { padding: 18px 15px 24px; }
+            .panel-title { font-size: 22px; }
+            .metric-value { font-size: 16px; }
+            .metric-value.money { font-size: 13px; }
+            .ol-popup { min-width: 0 !important; width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px) !important; }
+            .pop-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app-shell">
+        <aside id="gestao-panel">
+            <div class="panel-scroll">
+                <div class="eyebrow" id="panel-eyebrow">PAINEL DE GESTÃO • PR</div>
+                <h1 class="panel-title" id="panel-title">Execução de Convênios</h1>
+                <p class="panel-subtitle">Panorama municipal dos instrumentos em execução e das demais situações registradas no período analisado.</p>
+                <div class="period-badge" id="period-badge">Período</div>
+
+                <section class="section">
+                    <h2 class="section-title">Resumo estadual</h2>
+                    <div class="cards">
+                        <div class="metric-card"><div class="metric-label">Em execução</div><div class="metric-value" id="sum-exec">—</div></div>
+                        <div class="metric-card"><div class="metric-label">Municípios</div><div class="metric-value" id="sum-mun">—</div></div>
+                        <div class="metric-card"><div class="metric-label">Desembolsado</div><div class="metric-value money" id="sum-desemb">—</div></div>
+                        <div class="metric-card"><div class="metric-label">Saldo informado</div><div class="metric-value money" id="sum-saldo">—</div></div>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <h2 class="section-title">Maior quantidade em execução</h2>
+                    <div class="ranking" id="ranking"><div class="panel-subtitle">Carregando...</div></div>
+                </section>
+
+                <section class="section">
+                    <h2 class="section-title">Legenda</h2>
+                    <div class="legend-list" id="legend"><div class="panel-subtitle">A simbologia será lida diretamente do mapa.</div></div>
+                    <div class="legend-note">As cores são preservadas da simbologia exportada pelo QGIS.</div>
+                </section>
+            </div>
+        </aside>
+
+        <button id="panel-toggle" type="button" aria-label="Recolher painel" title="Recolher/abrir painel">‹</button>
+
+        <div id="map">
+            <div id="popup" class="ol-popup">
+                <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+                <div id="popup-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="resources/qgis2web_expressions.js"></script>
+    <script src="./resources/functions.js"></script>
+    <script src="./resources/ol.js"></script>
+    <script src="./resources/ol-layerswitcher.js"></script>
+    <script src="resources/photon-geocoder-autocomplete.min.js"></script>
+    <script src="resources/olms.js"></script>
+    <script src="layers/SimpPARANA_0.js"></script>
+    <script src="styles/SimpPARANA_0_style.js"></script>
+    <script src="./layers/layers.js" type="text/javascript"></script>
+    <script src="./resources/Autolinker.min.js"></script>
+    <script src="./resources/qgis2web.js"></script>
+
+    <script>
+    (function () {
+        'use strict';
+
+        const panel = document.getElementById('gestao-panel');
+        const toggle = document.getElementById('panel-toggle');
+        const content = document.getElementById('popup-content');
+
+        const norm = (s) => String(s == null ? '' : s)
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+        const asNumber = (v) => {
+            if (v == null || v === '') return 0;
+            if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+            let s = String(v).trim().replace(/R\$/gi, '').replace(/\s/g, '');
+            if (/^-?\d{1,3}(\.\d{3})*,\d+$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+            else if (/^-?\d+,\d+$/.test(s)) s = s.replace(',', '.');
+            const n = Number(s);
+            return Number.isFinite(n) ? n : 0;
+        };
+
+        const fmtInt = (n) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(asNumber(n));
+        const fmtMoney = (n) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(asNumber(n));
+        const fmtPercent = (n) => `${new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(asNumber(n))}%`;
+
+        function findKey(props, candidates) {
+            const keys = Object.keys(props || {});
+            const nc = candidates.map(norm);
+            for (const c of nc) {
+                const exact = keys.find(k => norm(k) === c);
+                if (exact) return exact;
+            }
+            for (const c of nc) {
+                const end = keys.find(k => norm(k).endsWith(c));
+                if (end) return end;
+            }
+            for (const c of nc) {
+                const has = keys.find(k => norm(k).includes(c));
+                if (has) return has;
+            }
+            return null;
+        }
+
+        function prop(props, candidates, fallback = '') {
+            const k = findKey(props, candidates);
+            return k ? props[k] : fallback;
+        }
+
+        function esc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        const situationMap = [
+            ['SIT_EM_EXECUCAO', 'Em execução'],
+            ['SIT_PROP_PT_ENV_ANAL', 'Proposta/Plano de Trabalho Enviado para Análise'],
+            ['SIT_PROP_PT_REJEIT_POR_IMP_TEC', 'Proposta/Plano de Trabalho Rejeitado por Impedimento técnico'],
+            ['SIT_PROP_PT_REJEIT', 'Proposta/Plano de Trabalho Rejeitado'],
+            ['SIT_PROP_PT_CADASTRADOS', 'Proposta/Plano de Trabalho Cadastrado'],
+            ['SIT_PC_CONCL', 'Prestação de Contas Concluída'],
+            ['SIT_PROP_PT_EM_COMPLEMENTACAO', 'Proposta/Plano de Trabalho em Complementação'],
+            ['SIT_PROPOSTA_APROV_E_PT_EM_ANAL', 'Proposta Aprovada e Plano de Trabalho em Análise'],
+            ['SIT_PROPOSTA_APROV_E_PT_EM_COMPLEMENTACAO', 'Proposta Aprovada e Plano de Trabalho em Complementação'],
+            ['SIT_PROPOSTA_APROV_E_PT_COMPL_ENV_ANAL', 'Proposta Aprovada e Plano de Trabalho Complementado Enviado para Análise'],
+            ['SIT_PROPOSTA_APROV_E_PT_COMPL_EM_ANAL', 'Proposta Aprovada e Plano de Trabalho Complementado em Análise'],
+            ['SIT_PROP_PT_COMPL_ENV_ANAL', 'Proposta/Plano de Trabalho Complementado Enviado para Análise'],
+            ['SIT_PROP_PT_COMPL_EM_ANAL', 'Proposta/Plano de Trabalho Complementado em Análise'],
+            ['SIT_PROP_PT_APROV_2', 'Proposta/Plano de Trabalho Aprovado'],
+            ['SIT_PROP_PT_APROV', 'Proposta/Plano de Trabalho Aprovado'],
+            ['SIT_PROP_PT_EM_ANAL', 'Proposta/Plano de Trabalho em Análise'],
+            ['SIT_PC_ENV_ANAL', 'Prestação de Contas Enviada para Análise'],
+            ['SIT_PC_COMPROVADA_EM_ANAL', 'Prestação de Contas Comprovada em Análise'],
+            ['SIT_PC_EM_ANAL', 'Prestação de Contas em Análise'],
+            ['SIT_PC_APROV_COM_RESSALVAS', 'Prestação de Contas Aprovada com Ressalvas'],
+            ['SIT_PC_APROV', 'Prestação de Contas Aprovada'],
+            ['SIT_PC_INICIADA_POR_ANTECIPACAO', 'Prestação de Contas Iniciada por Antecipação'],
+            ['SIT_PC_EM_COMPLEMENTACAO', 'Prestação de Contas em Complementação'],
+            ['SIT_AGUARDANDO_PC', 'Aguardando Prestação de Contas'],
+            ['SIT_CONVENIO_RESCINDIDO', 'Convênio Rescindido'],
+            ['SIT_CONVENIO_ANULADO', 'Convênio Anulado'],
+            ['SIT_CANCELADO', 'Cancelado'],
+            ['SIT_PROPOSTA_ELIMINADA_EM_CHAMAMENTO_PUBLICO', 'Proposta Eliminada em Chamamento Público']
+        ];
+
+        function featureProps(rawFeature) {
+            if (!rawFeature) return {};
+            return typeof rawFeature.getProperties === 'function' ? rawFeature.getProperties() : (rawFeature.properties || {});
+        }
+
+        function getRawFeatures() {
+            if (typeof window.json_SimpPARANA_0 !== 'undefined' && Array.isArray(window.json_SimpPARANA_0.features)) return window.json_SimpPARANA_0.features;
+            if (typeof json_SimpPARANA_0 !== 'undefined' && Array.isArray(json_SimpPARANA_0.features)) return json_SimpPARANA_0.features;
+            return [];
+        }
+
+        function getLayer() {
+            if (typeof window.lyr_SimpPARANA_0 !== 'undefined') return window.lyr_SimpPARANA_0;
+            try { if (typeof lyr_SimpPARANA_0 !== 'undefined') return lyr_SimpPARANA_0; } catch (e) {}
+            return null;
+        }
+
+        function getMap() {
+            if (typeof window.map !== 'undefined') return window.map;
+            try { if (typeof map !== 'undefined') return map; } catch (e) {}
+            return null;
+        }
+
+        function setupPanelToggle() {
+            const update = () => {
+                const collapsed = panel.classList.contains('collapsed');
+                toggle.innerHTML = collapsed ? '›' : '‹';
+                toggle.setAttribute('aria-label', collapsed ? 'Abrir painel' : 'Recolher painel');
+                setTimeout(() => { const m = getMap(); if (m && m.updateSize) m.updateSize(); }, 270);
+            };
+            toggle.addEventListener('click', () => { panel.classList.toggle('collapsed'); update(); });
+            if (window.matchMedia('(max-width: 900px)').matches) panel.classList.add('collapsed');
+            update();
+            window.addEventListener('resize', () => { const m = getMap(); if (m && m.updateSize) m.updateSize(); });
+        }
+
+        function buildSummary(rawFeatures) {
+            if (!rawFeatures.length) return;
+            const p0 = featureProps(rawFeatures[0]);
+            const kMun = findKey(p0, ['MUNICIPIO', 'NM_MUN', 'NOME_MUNICIPIO']);
+            const kExec = findKey(p0, ['QTD_EM_EXECUCAO', 'EmEXEC', 'EM_EXECUCAO']);
+            const kDes = findKey(p0, ['VL_DESEMBOLSADO_EXEC', 'VL_DESEMB_EXEC', 'DESEMBOLSADO']);
+            const kSaldo = findKey(p0, ['VL_SALDO_EXEC', 'SALDO_INFORMADO', 'SALDO_EXEC']);
+            const kUF = findKey(p0, ['SIGLA_UF', 'UF']);
+            const kAnoI = findKey(p0, ['ANO_INICIAL']);
+            const kAnoF = findKey(p0, ['ANO_FINAL']);
+
+            let totalExec = 0, totalDes = 0, totalSaldo = 0;
+            const munSet = new Set();
+            const ranking = [];
+
+            rawFeatures.forEach(f => {
+                const p = featureProps(f);
+                const mun = kMun ? p[kMun] : '';
+                const exec = kExec ? asNumber(p[kExec]) : 0;
+                if (mun) munSet.add(String(mun));
+                totalExec += exec;
+                totalDes += kDes ? asNumber(p[kDes]) : 0;
+                totalSaldo += kSaldo ? asNumber(p[kSaldo]) : 0;
+                ranking.push({ mun: mun || 'Município', qtd: exec });
+            });
+
+            document.getElementById('sum-exec').textContent = fmtInt(totalExec);
+            document.getElementById('sum-mun').textContent = fmtInt(munSet.size || rawFeatures.length);
+            document.getElementById('sum-desemb').textContent = fmtMoney(totalDes);
+            document.getElementById('sum-saldo').textContent = fmtMoney(totalSaldo);
+
+            const uf = (kUF && p0[kUF]) ? String(p0[kUF]) : 'PR';
+            const anoI = kAnoI ? p0[kAnoI] : '';
+            const anoF = kAnoF ? p0[kAnoF] : '';
+            document.getElementById('panel-eyebrow').textContent = `PAINEL DE GESTÃO • ${uf}`;
+            document.getElementById('period-badge').textContent = (anoI && anoF) ? `${anoI}–${anoF}` : 'Período analisado';
+            document.title = `Painel de Gestão • ${uf} | Execução de Convênios`;
+
+            ranking.sort((a,b) => b.qtd - a.qtd || String(a.mun).localeCompare(String(b.mun), 'pt-BR'));
+            document.getElementById('ranking').innerHTML = ranking.slice(0, 5).map(r =>
+                `<div class="rank-row"><div class="rank-name" title="${esc(r.mun)}">${esc(r.mun)}</div><div class="rank-value">${fmtInt(r.qtd)}</div></div>`
+            ).join('');
+        }
+
+        function cssColor(c) {
+            if (Array.isArray(c)) return `rgba(${c[0]},${c[1]},${c[2]},${c.length > 3 ? c[3] : 1})`;
+            return String(c || '#d0d5dd');
+        }
+
+        function buildLegend(layer) {
+            const el = document.getElementById('legend');
+            if (!layer || !layer.getSource || !layer.getStyle) return;
+            const fs = layer.getSource().getFeatures ? layer.getSource().getFeatures() : [];
+            if (!fs.length) return;
+            const p0 = featureProps(fs[0]);
+            const kExec = findKey(p0, ['QTD_EM_EXECUCAO', 'EmEXEC', 'EM_EXECUCAO']);
+            const styleFn = layer.getStyle();
+            if (typeof styleFn !== 'function') return;
+
+            const groups = new Map();
+            fs.forEach(f => {
+                let styles;
+                try { styles = styleFn(f, 1000); } catch (e) { return; }
+                styles = Array.isArray(styles) ? styles : [styles];
+                const s = styles.find(x => x && x.getFill && x.getFill());
+                if (!s) return;
+                const col = cssColor(s.getFill().getColor());
+                const val = kExec ? asNumber(featureProps(f)[kExec]) : 0;
+                if (!groups.has(col)) groups.set(col, { min: val, max: val, count: 0 });
+                const g = groups.get(col); g.min = Math.min(g.min, val); g.max = Math.max(g.max, val); g.count++;
+            });
+
+            if (!groups.size) return;
+            const arr = Array.from(groups.entries()).map(([color,g]) => ({color, ...g})).sort((a,b) => a.min - b.min);
+            el.innerHTML = arr.map(g => {
+                const label = g.min === g.max ? fmtInt(g.min) : `${fmtInt(g.min)} a ${fmtInt(g.max)}`;
+                return `<div class="legend-row"><span class="legend-swatch" style="background:${esc(g.color)}"></span><span>${label}</span></div>`;
+            }).join('');
+        }
+
+        function applyTwoLineLabels(layer) {
+            if (!layer || !layer.getSource || !layer.getStyle) return;
+            const original = layer.getStyle();
+            if (typeof original !== 'function') return;
+            layer.setStyle(function(feature, resolution) {
+                let styles = original(feature, resolution);
+                const wasArray = Array.isArray(styles);
+                styles = wasArray ? styles : [styles];
+                const p = featureProps(feature);
+                const mun = prop(p, ['MUNICIPIO', 'NM_MUN', 'NOME_MUNICIPIO'], '');
+                const qtd = prop(p, ['QTD_EM_EXECUCAO', 'EmEXEC', 'EM_EXECUCAO'], '');
+                const label = mun !== '' && qtd !== '' ? `${mun}\n${fmtInt(qtd)}` : mun;
+
+                const clones = styles.filter(Boolean).map(s => s.clone ? s.clone() : s);
+                if (clones.length && label) {
+                    let target = clones.find(s => s.getText && s.getText());
+                    if (!target) target = clones[0];
+                    if (target && target.setText) {
+                        let txt = target.getText ? target.getText() : null;
+                        txt = txt && txt.clone ? txt.clone() : new ol.style.Text();
+                        txt.setText(label);
+                        txt.setFont('600 10px "Segoe UI", Arial, sans-serif');
+                        txt.setFill(new ol.style.Fill({ color: '#263238' }));
+                        txt.setStroke(new ol.style.Stroke({ color: '#ffffff', width: 3 }));
+                        txt.setOverflow(true);
+                        txt.setTextAlign('center');
+                        target.setText(txt);
+                    }
+                }
+                return wasArray ? clones : clones[0];
+            });
+        }
+
+        function situationsFromProps(p) {
+            const out = [];
+            const used = new Set();
+            situationMap.forEach(([suffix,label]) => {
+                const k = findKey(p, [suffix]);
+                if (!k || used.has(k)) return;
+                const n = asNumber(p[k]);
+                if (n > 0) { out.push([label, n]); used.add(k); }
+            });
+            if (out.length) return out;
+
+            const resumo = prop(p, ['RESUMO_SITUACOES'], '');
+            if (!resumo) return [];
+            return String(resumo).split('|').map(item => {
+                const idx = item.lastIndexOf(':');
+                if (idx < 0) return null;
+                return [item.slice(0, idx).trim(), asNumber(item.slice(idx + 1))];
+            }).filter(x => x && x[1] > 0);
+        }
+
+        function popupHtml(feature) {
+            const p = featureProps(feature);
+            const mun = prop(p, ['MUNICIPIO', 'NM_MUN', 'NOME_MUNICIPIO'], 'Município');
+            const anoI = prop(p, ['ANO_INICIAL'], '');
+            const anoF = prop(p, ['ANO_FINAL'], '');
+            const exec = prop(p, ['QTD_EM_EXECUCAO', 'EmEXEC', 'EM_EXECUCAO'], 0);
+            const global = prop(p, ['VL_GLOBAL_EXEC'], 0);
+            const repasse = prop(p, ['VL_REPASSE_EXEC'], 0);
+            const desemb = prop(p, ['VL_DESEMBOLSADO_EXEC', 'VL_DESEMB_EXEC'], 0);
+            const saldo = prop(p, ['VL_SALDO_EXEC'], 0);
+            const perc = prop(p, ['PERC_SALDO_REP'], 0);
+            const link = prop(p, ['LINK_EMAIL'], '');
+            const sit = situationsFromProps(p);
+            const period = anoI && anoF ? `${anoI}–${anoF}` : 'período analisado';
+
+            const cards = [
+                ['Em execução', fmtInt(exec)],
+                ['Valor global', fmtMoney(global)],
+                ['Repasse', fmtMoney(repasse)],
+                ['Desembolsado', fmtMoney(desemb)],
+                ['Saldo informado', fmtMoney(saldo)],
+                ['Saldo / Repasse', fmtPercent(perc)]
+            ];
+
+            const sitHtml = sit.length ? sit.map(([d,q]) =>
+                `<div class="situacao-row"><div class="situacao-desc">${esc(d)}</div><div class="situacao-qtd">${fmtInt(q)}</div></div>`
+            ).join('') : '<div class="panel-subtitle">Sem situações adicionais informadas.</div>';
+
+            let linkHtml = '';
+            if (link) {
+                const div = document.createElement('div');
+                div.innerHTML = String(link);
+                const a = div.querySelector('a');
+                if (a && a.getAttribute('href')) linkHtml = `<div class="pop-link"><a href="${esc(a.getAttribute('href'))}" target="_blank" rel="noopener">Solicitar informações</a></div>`;
+            }
+
+            return `<div class="pop-head"><div class="pop-municipio">${esc(mun)}</div><div class="pop-meta">Situação municipal • ${esc(period)}</div></div>
+                <div class="pop-grid">${cards.map(([l,v]) => `<div class="pop-card"><div class="pop-card-label">${esc(l)}</div><div class="pop-card-value">${esc(v)}</div></div>`).join('')}</div>
+                <div class="pop-section-title">Situações ${esc(period)}</div>
+                <div class="situacao-list">${sitHtml}</div>${linkHtml}`;
+        }
+
+        function setupPopup(layer) {
+            const m = getMap();
+            if (!m || !layer) return;
+            m.on('singleclick', function(evt) {
+                let found = null;
+                m.forEachFeatureAtPixel(evt.pixel, function(feature, hitLayer) {
+                    if (hitLayer === layer) { found = feature; return true; }
+                    return false;
+                });
+                if (!found) return;
+                content.innerHTML = popupHtml(found);
+                const overlays = m.getOverlays && m.getOverlays().getArray ? m.getOverlays().getArray() : [];
+                const ov = overlays.find(o => o.getElement && o.getElement() && o.getElement().id === 'popup');
+                if (ov && ov.setPosition) ov.setPosition(evt.coordinate);
+            });
+        }
+
+        function init(retry) {
+            const raw = getRawFeatures();
+            const layer = getLayer();
+            const m = getMap();
+            if ((!raw.length || !layer || !m) && retry < 40) {
+                return setTimeout(() => init(retry + 1), 150);
+            }
+            buildSummary(raw);
+            buildLegend(layer);
+            applyTwoLineLabels(layer);
+            setupPopup(layer);
+            setTimeout(() => { if (m && m.updateSize) m.updateSize(); }, 100);
+        }
+
+        setupPanelToggle();
+        window.addEventListener('load', () => init(0));
+    })();
+    </script>
+</body>
+</html>
