@@ -1,23 +1,15 @@
-PAINEL PARANÁ — ATUALIZAÇÃO GITHUB
-Versão preparada em 03/11/2026
+PR_GITHUB_PADRAO_MA_v1
 
-COMO ATUALIZAR
+Padrão visual/funcional: Maranhão.
+Dados, geometria e simbologia: Paraná.
+
+Regra do mapa:
+- cor = execução da Gestão Municipal;
+- rótulo = nome do município + quantidade municipal em execução;
+- popup = Visão do território + Gestão Municipal + Outros Proponentes + Ver entidades + WhatsApp.
+
+Para publicar no GitHub:
 1. Descompacte este ZIP.
-2. No repositório do GitHub, envie TODO o conteúdo desta pasta para a raiz.
-3. Confirme a substituição dos arquivos existentes.
-4. Aguarde a publicação do GitHub Pages e faça Ctrl+F5 no navegador.
-
-PADRÃO APLICADO
-- Cor do município: MUN_QTD_EM_EXECUCAO (somente Gestão Municipal).
-- Rótulo: NM_MUN + quantidade municipal em execução.
-- Popup: Visão do território + Gestão Municipal + Outros Proponentes.
-- Lista de entidades recolhível.
-- WhatsApp para solicitar análise detalhada.
-- Cache-busting nos arquivos principais da atualização.
-
-VALIDAÇÃO DESTA BASE
-- 399 municípios.
-- Resumos de situações fecham com os respectivos totais.
-- Contagem das entidades de Outros Proponentes fecha com OUT_QTD_PROPONENTES.
-- A exportação original tinha QTDEXEC divergente de MUN_QTD_EM_EXECUCAO em 137 municípios;
-  o pacote web foi ajustado para usar o campo municipal, conforme o padrão atual do painel.
+2. Envie TODO o conteúdo da pasta para a raiz do repositório do Paraná.
+3. Substitua os arquivos existentes.
+4. Após publicar, use Ctrl+F5 na primeira conferência.

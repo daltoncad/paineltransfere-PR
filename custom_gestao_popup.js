@@ -5,7 +5,8 @@
 
     var WHATSAPP_NUMERO = '5584996743107';
 
-    // Compatibilidade mantida com exportações antigas de campos curtos; a exportação atual usa os nomes completos da V1.4.
+    // Compatibilidade com exportações de campos encurtados pelo QGIS/DBF.
+    // O mapa abaixo também reconhece os nomes completos gerados pela V1.4.
     var SHORT = {
         UF: 'mapa_situa',
         MUNICIPIO: 'mapa_sit_1',
@@ -39,8 +40,7 @@
         PR: 'Paraná',
         SC: 'Santa Catarina',
         RS: 'Rio Grande do Sul',
-        MA: 'Maranhão',
-        RJ: 'Rio de Janeiro'
+        MA: 'Maranhão'
     };
 
     function esc(value) {
@@ -111,30 +111,13 @@
         return s.replace(/\s{2,}/g, ' ').trim();
     }
 
-    function summaryList(text, expectedTotal) {
+    function summaryList(text) {
         if (!text) return '<div class="gestao-empty">Nenhuma situação registrada no período.</div>';
         var items = String(text).split(/\s*\|\s*/).filter(function (x) { return x.trim() !== ''; });
         if (!items.length) return '<div class="gestao-empty">Nenhuma situação registrada no período.</div>';
-
-        var soma = 0;
-        var validos = [];
-        items.forEach(function (item) {
-            var m = String(item).trim().match(/:\s*(\d+)\s*$/);
-            if (m) {
-                soma += parseInt(m[1], 10) || 0;
-                validos.push(item);
-            }
-        });
-
-        var html = '<ul class="gestao-list">' + validos.map(function (item) {
+        return '<ul class="gestao-list">' + items.map(function (item) {
             return '<li>' + esc(prettyStatus(item)) + '</li>';
         }).join('') + '</ul>';
-
-        var esperado = intValue(expectedTotal);
-        if (esperado > 0 && soma !== esperado) {
-            html += '<div class="gestao-data-warning">⚠ O resumo de situações veio incompleto nesta exportação do QGIS (' + soma + ' de ' + esperado + ').</div>';
-        }
-        return html;
     }
 
     function formatCnpj(value) {
@@ -154,8 +137,7 @@
         var m = text.match(/^(.*?)\s*\[([^\]]+)\]\s*—\s*(\d+)\s*propostas?\s*—\s*repasse\s*(R\$\s*[0-9.]+,[0-9]{2})(?:\s*—\s*CNPJ\/ID:\s*(.+))?$/i);
         if (!m) {
             // Fragmentos truncados no fim do campo são omitidos para não exibir lixo.
-            if (text.indexOf('[') >= 0 || /—\s*\d+\s*propostas?/i.test(text)) return null;
-            if (text.length > 180) return null;
+            if (text.length > 210 && text.indexOf('[') < 0) return null;
             return { name: text, type: 'Outro proponente', qtd: '', repasse: '', cnpj: '' };
         }
         return {
@@ -167,18 +149,13 @@
         };
     }
 
-    function entitiesHtml(text, expectedCount) {
+    function entitiesHtml(text) {
         if (!text) return '';
         var entities = String(text).split(/\s*\|\|\s*/).filter(function (x) { return x.trim() !== ''; });
         var parsed = entities.map(parseEntity).filter(Boolean);
-        if (!parsed.length) {
-            if (intValue(expectedCount) > 0) {
-                return '<div class="gestao-data-warning">⚠ A relação detalhada das entidades não veio completa nesta exportação do QGIS.</div>';
-            }
-            return '';
-        }
+        if (!parsed.length) return '';
 
-        var html = '<div class="gestao-entity-list">' + parsed.map(function (e) {
+        return '<div class="gestao-entity-list">' + parsed.map(function (e) {
             var qtdText = e.qtd ? (e.qtd + (e.qtd === '1' ? ' proposta/instrumento' : ' propostas/instrumentos')) : '';
             var nums = [qtdText, e.repasse ? ('Repasse: ' + e.repasse) : ''].filter(Boolean).join(' · ');
             return '<div class="gestao-entity">' +
@@ -188,12 +165,6 @@
                 (e.cnpj ? '<div class="gestao-entity-cnpj">CNPJ/ID: ' + esc(e.cnpj) + '</div>' : '') +
             '</div>';
         }).join('') + '</div>';
-
-        var esperado = intValue(expectedCount);
-        if (esperado > 0 && parsed.length !== esperado) {
-            html += '<div class="gestao-data-warning">⚠ A exportação trouxe o detalhamento de ' + parsed.length + ' de ' + esperado + ' entidades/proponentes. Os totais acima permanecem os informados pela base.</div>';
-        }
-        return html;
     }
 
     function moneyRow(label, value) {
@@ -238,7 +209,7 @@
         if (!prefix) return '';
 
         var municipio = feature.get('NM_MUN') || getProp(feature, prefix, 'MUNICIPIO', 'Município');
-        var uf = getProp(feature, prefix, 'UF', feature.get('SIGLA_UF') || 'RJ');
+        var uf = getProp(feature, prefix, 'UF', feature.get('SIGLA_UF') || 'PR');
         var anoIni = getProp(feature, prefix, 'ANO_INICIAL', '');
         var anoFim = getProp(feature, prefix, 'ANO_FINAL', '');
 
@@ -272,13 +243,13 @@
                 '<strong>' + munProponentes + '</strong> ' + (munProponentes === 1 ? 'proponente municipal' : 'proponentes municipais') +
             '</div>' +
             '<div class="gestao-section-label">Situações da gestão municipal</div>' +
-            summaryList(munSituacoes, munTotal) +
+            summaryList(munSituacoes) +
             municipalFinance(feature, prefix) +
         '</div>';
 
         var outros;
         if (outProp > 0 || outTotal > 0) {
-            var details = entitiesHtml(outEntidades, outProp);
+            var details = entitiesHtml(outEntidades);
             outros = '<div class="gestao-card outros">' +
                 '<div class="gestao-card-title-row">' +
                     '<div class="gestao-card-title">Outros Proponentes no Município</div>' +
@@ -288,7 +259,7 @@
                     ' · <strong>' + outTotal + '</strong> propostas/instrumentos</div>' +
                 (outRepasse ? '<div class="gestao-repasse-outros"><strong>Repasse associado às propostas:</strong> ' + esc(outRepasse) + '</div>' : '') +
                 '<div class="gestao-section-label">Situações dos outros proponentes</div>' +
-                summaryList(outSituacoes, outTotal) +
+                summaryList(outSituacoes) +
                 (details ? '<details class="gestao-details"><summary>Ver entidades (' + outProp + ')</summary>' + details + '</details>' : '') +
             '</div>';
         } else {
